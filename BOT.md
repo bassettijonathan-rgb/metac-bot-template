@@ -38,7 +38,7 @@ Files in this folder are meant to be copied on top of a fork of
   No model call, nothing submitted, costs nothing.
 - `tests/`: unit tests with stand-ins for the template and the library, standard
   library plus `requests` (`python -m unittest discover -s tests`).
-- `tests_real_library/`: runs the bot end to end on all five question types
+- `tests_real_library/`: runs the bot end to end on every question type
   against the real template and the real forecasting-tools library, with only
   the model call and the answer parser replaced
   (`uv run python -m unittest discover -s tests_real_library`). Kept in its own
@@ -68,17 +68,22 @@ cannot forecast on scored questions.
 
 ## Status and known limits (2026-11-14)
 
-- Unit tests pass (47), and so do the 8 end-to-end tests against the real
-  template and forecasting-tools 0.3.5 (binary, multiple choice, numeric, date
-  and conditional questions; Python 3.11 and 3.13). The bot has NOT yet talked
-  to Metaculus or to any model: that is the "Test Bot" workflow on the fork
-  (unscored bot-testing-area).
+- Unit tests pass (47), and so do the 9 end-to-end tests against the real
+  template and forecasting-tools 0.3.5 (binary, multiple choice, numeric,
+  discrete, date and conditional questions, plus the entry point and what it
+  would submit; Python 3.11 and 3.13).
+- "Setup check" passed on GitHub Actions: the Metaculus bot token is accepted,
+  the bot-testing-area lists 10 open questions (binary, multiple choice,
+  numeric, discrete, date), and OpenRouter offers all six model names in
+  `config.py`.
+- The bot has NOT yet called any model or submitted a forecast: that is the
+  "Test Bot" workflow (unscored bot-testing-area) and it needs
+  `OPENROUTER_API_KEY`.
 - The fork matches the template at commit `bcbd016`. The library in `uv.lock`
   targets the Fall 2026 season (`CURRENT_AI_COMPETITION_ID`): before the next
   season starts, merge the template's update so the bot follows the new season.
-- Model ids and the OpenRouter web plugin option (`engine: native`) come from
-  documentation and a third-party price list, not from a live call.
-  `check_setup.py` verifies the ids for free; the plugin needs a real call.
+- The OpenRouter web plugin option (`engine: native`) comes from documentation,
+  not from a live call. Only a real run can confirm it.
 - The budget guard reads the credit limit of the OpenRouter key. A key without
   a limit of its own reports nothing, and the bot then stays on `standard`.
 - Cost per question is an estimate (about $0.15 to $0.30 on `standard`); measure

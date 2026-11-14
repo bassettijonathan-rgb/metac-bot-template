@@ -117,6 +117,20 @@ def _questions() -> list:
     ]
 
 
+def _discrete_question():
+    # Whole-number outcomes 0..10: Metaculus wants a short curve, not 201 points.
+    return ft.DiscreteQuestion(
+        question_text="How many of the ten?",
+        upper_bound=10.5,
+        lower_bound=-0.5,
+        open_upper_bound=False,
+        open_lower_bound=False,
+        cdf_size=12,
+        unit_of_measure="items",
+        **_common(5),
+    )
+
+
 def _conditional_question():
     def sub(question_id, text, conditional_type=None):
         return ft.BinaryQuestion(
@@ -209,6 +223,29 @@ class RealLibraryTests(unittest.TestCase):
         explanation = reports[0].explanation
         for framing in {member.framing for member in profile.ensemble}:
             self.assertIn(framing, explanation)
+
+    def test_discrete_question_gets_a_curve_of_the_size_it_asks_for(self):
+        ensemble_bot = bot.EnsembleBot(
+            profile=config.PROFILES["standard"], publish_reports_to_metaculus=False
+        )
+
+        async def structure(text_to_structure, output_type, **kwargs):
+            levels = [0.05, 0.1, 0.2, 0.4, 0.5, 0.6, 0.8, 0.9, 0.95]
+            return [ft.Percentile(percentile=p, value=1 + 8 * p) for p in levels]
+
+        with mock.patch.object(ft.GeneralLlm, "invoke", _fake_invoke), mock.patch.object(
+            template, "structure_output", structure
+        ):
+            reports = asyncio.run(
+                ensemble_bot.forecast_questions([_discrete_question()], return_exceptions=True)
+            )
+        self.assertNotIsInstance(reports[0], BaseException, reports[0])
+        self.assertEqual(reports[0].errors, [])
+        cdf = [point.percentile for point in reports[0].prediction.get_cdf()]
+        self.assertEqual(len(cdf), 12)
+        self.assertEqual(cdf, sorted(cdf))
+        self.assertAlmostEqual(cdf[0], 0.0)
+        self.assertAlmostEqual(cdf[-1], 1.0)
 
     def test_conditional_question_keeps_one_member_per_forecast(self):
         profile = config.PROFILES["standard"]
