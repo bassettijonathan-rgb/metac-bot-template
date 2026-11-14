@@ -3,20 +3,23 @@ name: Forecast on new AI tournament questions
 on:
   workflow_dispatch:
   schedule:
-    - cron: "7,27,47 * * * *" # every 20 min, offset off the hour. Make sure to skip already-forecasted questions!
+    - cron: "7,27,47 * * * *" # every 20 min, offset off the hour. Questions stay open for 3 hours only.
 
-# Add concurrency group to prevent parallel runs
+# Never run two forecast jobs at once
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
 
-
-# Daily job to run the simple forecast bot
+# Safety switch: nothing here runs, on the schedule or by hand, until the
+# repository variable TOURNAMENT_ENABLED is set to true (Settings -> Secrets and
+# variables -> Actions -> Variables). Set it only after the "Test Bot" workflow
+# has passed, so an untested bot never forecasts on scored questions.
 jobs:
   forecast_job:
-    runs-on: ubuntu-latest # determines the machine that will run the job - keep as is
-    steps: # sets up the steps that will be run in order
-      # setup repository with all necessary dependencies - keep as is
+    if: vars.TOURNAMENT_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
       - name: Check out repository
         uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -30,15 +33,13 @@ jobs:
         run: uv sync --locked
       - name: Run bot
         run: |
-          uv run python main.py
-        # this reads the environment variables from the github repository.
-        # Store under Settings --> Secrets and variables --> Actions
+          uv run python bot.py --mode tournament
+        # Secrets live under Settings -> Secrets and variables -> Actions.
+        # BOT_PROFILE is an optional repository *variable* (auto, full, standard, lean, minimal).
         env:
-          METACULUS_TOKEN: ${{ secrets.METACULUS_TOKEN }} # replace this with the name of the variable under which you stored your own Metaculus token
-          PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
-          EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          METACULUS_TOKEN: ${{ secrets.METACULUS_TOKEN }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ASKNEWS_CLIENT_ID: ${{ secrets.ASKNEWS_CLIENT_ID }}
           ASKNEWS_SECRET: ${{ secrets.ASKNEWS_SECRET }}
+          ASKNEWS_API_KEY: ${{ secrets.ASKNEWS_API_KEY }}
+          BOT_PROFILE: ${{ vars.BOT_PROFILE }}
