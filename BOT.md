@@ -43,8 +43,9 @@ Files in this folder are meant to be copied on top of a fork of
   the model call and the answer parser replaced
   (`uv run python -m unittest discover -s tests_real_library`). Kept in its own
   folder because `tests/` swaps the library for stand-ins.
-- `.github/workflows/`: scheduled run, manual test run, unit tests. The
-  Metaculus Cup schedule from the template is removed (bots win no prizes there).
+- `.github/workflows/`: scheduled run, manual test run, setup check, unit tests.
+  The Metaculus Cup schedule from the template is removed (bots win no prizes
+  there).
 
 ## Settings (GitHub: Settings, Secrets and variables, Actions)
 
@@ -57,7 +58,8 @@ cannot forecast on scored questions.
 
 ## Going live, in order
 
-1. "Test Bot" with `check_only` ticked: token, model names. Free.
+1. "Setup check" (or "Test Bot" with `check_only` ticked): token, model names.
+   Free. It also runs on pull requests that change `config.py`.
 2. Add `OPENROUTER_API_KEY`, run "Test Bot" in full on the unscored
    bot-testing-area, read the cost per question, tune `config.py`.
 3. Set the variable `TOURNAMENT_ENABLED` to `true`. On a fork GitHub also keeps
