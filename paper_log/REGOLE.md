@@ -30,7 +30,9 @@ probabilità, quindi il termine di confronto è la moneta: 50%.
    vicina al 50%.
 4. Pista A: solo mercati con scambi veri (volume di almeno 10.000 dollari sul
    contratto o scambi negli ultimi 3 giorni). Prezzo registrato: punto medio tra
-   denaro e lettera.
+   denaro e lettera. Aggiunta del 15 novembre 2026 sera, prima di qualsiasi
+   esito: la distanza tra denaro e lettera deve essere al massimo di 10 punti,
+   altrimenti il prezzo non è una probabilità affidabile e l'evento si scarta.
 5. Il registro (`registro.jsonl`) è a sola aggiunta. Ogni riga contiene l'impronta
    della riga precedente, quindi una modifica a posteriori si vede
    (`python3 registro.py verify`). Dopo ogni tornata il registro viene anche
@@ -99,3 +101,15 @@ probabilità, quindi il termine di confronto è la moneta: 50%.
   non è garantita: il consenso degli analisti è comunque pubblico.
 - Casi della stessa settimana si muovono insieme (se il mercato crolla, crollano
   tutti i titoli): l'intervallo di confidenza è calcolato per evento, ma resta ottimistico.
+
+## Note di percorso
+
+- 15 novembre 2026, seconda tornata: scartato il mercato Polymarket sulla benzina
+  a fine novembre (denaro 0,42, lettera 0,89 sulla soglia di 3,70 dollari). La mia
+  stima fissata alla cieca era 88%, quindi includerlo mi avrebbe favorito contro
+  un prezzo non credibile. Da qui la regola sulla distanza massima di 10 punti.
+- Scartati per volume troppo basso: Kalshi PCE di ottobre (circa 1.400 dollari
+  per contratto), richieste settimanali di sussidi, mercati Polymarket sulle
+  trimestrali. I mercati liquidi con scadenza vicina sono pochi (inflazione, Fed,
+  forse occupazione): la pista A potrebbe non arrivare a 50 casi entro il
+  15 febbraio 2027, e in quel caso il giudizio sarà "troppo presto".
