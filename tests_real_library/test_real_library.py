@@ -180,7 +180,7 @@ class RealLibraryTests(unittest.TestCase):
             search = ensemble_bot.get_llm("researcher", "llm")
             self.assertEqual(
                 search.litellm_kwargs["extra_body"],
-                {"plugins": [{"id": "web", "engine": "native"}]},
+                bot.search_request_options(profile.max_searches),
             )
 
     def test_all_question_types_run_end_to_end(self):
@@ -392,6 +392,64 @@ class RealLibraryTests(unittest.TestCase):
         for comment in comments:
             self.assertTrue(comment["is_private"])
             self.assertIn("Ensemble member", comment["text"])
+
+    def test_main_limit_forecasts_only_that_many_test_questions(self):
+        asked, posted = self._run_main(
+            "--mode",
+            "test_questions",
+            "--limit",
+            "2",
+            questions_by_tournament={"bot-testing-area": _questions()},
+        )
+        self.assertEqual(asked, ["bot-testing-area"])
+        forecasts = [
+            entry
+            for url, payload in posted
+            if url.endswith("/questions/forecast/")
+            for entry in payload
+        ]
+        self.assertEqual(len(forecasts), 2)
+
+    def test_limit_is_refused_in_tournament_mode(self):
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            self._run_main("--mode", "tournament", "--limit", "2", questions_by_tournament={})
+
+    def test_real_model_call_path_records_what_the_provider_charged(self):
+        import litellm
+        from forecasting_tools.ai_models import general_llm as general_llm_module
+
+        requests_sent: list[dict] = []
+
+        async def fake_acompletion(**kwargs):
+            requests_sent.append(kwargs)
+            return litellm.ModelResponse(
+                choices=[{"message": {"role": "assistant", "content": "findings"}}],
+                usage={
+                    "prompt_tokens": 9000,
+                    "completion_tokens": 700,
+                    "total_tokens": 9700,
+                    "cost": 0.0421,
+                    "server_tool_use_details": {"web_search_requests": 3},
+                },
+            )
+
+        ensemble_bot = bot.EnsembleBot(
+            profile=config.PROFILES["minimal"], publish_reports_to_metaculus=False
+        )
+        search = ensemble_bot.get_llm("researcher", "llm")
+        with mock.patch.object(general_llm_module, "acompletion", fake_acompletion):
+            answer = asyncio.run(search.invoke("What happened?"))
+
+        self.assertEqual(answer, "findings")
+        self.assertNotIn("stage", requests_sent[0])
+        self.assertNotIn("ledger", requests_sent[0])
+        (call,) = ensemble_bot.ledger.calls
+        self.assertEqual(call.stage, bot.SEARCH)
+        self.assertEqual(call.model, config.PROFILES["minimal"].search_model)
+        self.assertEqual(
+            (call.prompt_tokens, call.completion_tokens, call.web_searches), (9000, 700, 3)
+        )
+        self.assertAlmostEqual(call.cost_usd, 0.0421)
 
     def test_tournament_ids_exist_in_the_library(self):
         client = ft.MetaculusClient()

@@ -11,6 +11,10 @@ on:
         description: "Research and forecast but do not submit to Metaculus"
         type: boolean
         default: false
+      limit:
+        description: "Forecast at most this many test questions (leave empty for all of them)"
+        type: string
+        default: ""
 
 concurrency:
   group: ${{ github.workflow }}
@@ -45,8 +49,9 @@ jobs:
       - name: Run bot
         if: ${{ !inputs.check_only }}
         run: |
-          uv run python bot.py --mode test_questions ${{ inputs.dry_run && '--dry-run' || '' }}
+          uv run python bot.py --mode test_questions ${{ inputs.dry_run && '--dry-run' || '' }} ${LIMIT:+--limit "$LIMIT"}
         env:
+          LIMIT: ${{ inputs.limit }}
           METACULUS_TOKEN: ${{ secrets.METACULUS_TOKEN }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           ASKNEWS_CLIENT_ID: ${{ secrets.ASKNEWS_CLIENT_ID }}

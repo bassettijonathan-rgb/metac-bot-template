@@ -16,6 +16,8 @@ merge cleanly). What this file changes:
    tails are stated rather than extrapolated.
 5. Budget guard: the bot reads the remaining OpenRouter credit at start-up and
    steps down to cheaper models before the money runs out.
+6. Cost report: every model call is recorded with what OpenRouter charged for
+   it, and the run ends with a table of cost per stage (see costs.py).
 
 No human is in the loop: forecasts and comments are produced and submitted by
 this program only, as the tournament rules require.
@@ -24,6 +26,7 @@ Run:
     uv run python bot.py --mode test_questions     # unscored bot-testing-area
     uv run python bot.py --mode tournament         # live season + MiniBench
     uv run python bot.py --mode test_questions --dry-run   # do not submit
+    uv run python bot.py --mode test_questions --limit 2   # only 2 questions
 """
 from __future__ import annotations
 
@@ -62,6 +65,7 @@ from forecasting_tools import (
 
 import prompts
 from aggregation import aggregate_binary, disagreement
+from costs import FORECAST, HELPER, SEARCH, CostLedger, call_from_usage
 from config import (
     OUTSIDE_VIEW,
     Member,
@@ -106,12 +110,51 @@ def _has_asknews_keys() -> bool:
     )
 
 
+def search_request_options(max_searches: int) -> dict:
+    return {
+        "tools": [
+            {
+                "type": "openrouter:web_search",
+                "parameters": {"engine": "native", "max_uses": max_searches},
+            }
+        ],
+        "max_tool_calls": max_searches,
+    }
+
+
+class TrackedLlm(GeneralLlm):
+    """A GeneralLlm that writes what each call cost into the run's ledger."""
+
+    def __init__(self, model: str, *, stage: str, ledger: CostLedger, **kwargs) -> None:
+        super().__init__(model, **kwargs)
+        self.stage = stage
+        self.ledger = ledger
+
+    async def _call_litellm(self, prompt):  # type: ignore[override]
+        response = await super()._call_litellm(prompt)
+        try:  # accounting must never stop a forecast
+            usage = getattr(response, "usage", None)
+            hidden = getattr(response, "_hidden_params", None) or {}
+            self.ledger.record(
+                call_from_usage(self.stage, self.model, usage, hidden.get("response_cost"))
+            )
+            if self.stage == SEARCH and usage is not None:
+                dump = usage.model_dump() if hasattr(usage, "model_dump") else usage
+                logger.info(f"Web search call usage ({self.model}): {dump}")
+        except Exception as error:
+            logger.warning(f"Could not record the cost of a call: {error.__class__.__name__}")
+        return response
+
+
 class EnsembleBot(FallTemplateBot2026):
     def __init__(self, *, profile: Profile, **kwargs) -> None:
         self.profile = profile
+        self.ledger = CostLedger()
         self._member_llms: dict[str, GeneralLlm] = {}
         self._member_counter: dict[object, int] = {}
-        helper = GeneralLlm(model=profile.helper_model, temperature=None)
+        helper = TrackedLlm(
+            profile.helper_model, stage=HELPER, ledger=self.ledger, temperature=None
+        )
         super().__init__(
             research_reports_per_question=1,
             predictions_per_research_report=len(profile.ensemble),
@@ -131,20 +174,31 @@ class EnsembleBot(FallTemplateBot2026):
         if model not in self._member_llms:
             # temperature=None keeps each provider's default, which several of
             # the newest models require.
-            self._member_llms[model] = GeneralLlm(
-                model=model, temperature=None, timeout=240, allowed_tries=2
+            self._member_llms[model] = TrackedLlm(
+                model,
+                stage=FORECAST,
+                ledger=self.ledger,
+                temperature=None,
+                timeout=240,
+                allowed_tries=2,
             )
         return self._member_llms[model]
 
     def _search_llm(self) -> GeneralLlm:
-        # OpenRouter web plugin with the provider's own search engine. The
-        # donated tournament credits do not cover the Exa engine.
-        return GeneralLlm(
-            model=self.profile.search_model,
+        # OpenRouter's web search tool with the provider's own search engine
+        # (the donated tournament credits do not cover the Exa engine). Every
+        # search is billed, so the number of searches is capped three ways:
+        # max_uses (honoured by Anthropic's search), max_tool_calls
+        # (OpenRouter's own limit) and a budget line in the research prompt.
+        cap = self.profile.max_searches
+        return TrackedLlm(
+            self.profile.search_model,
+            stage=SEARCH,
+            ledger=self.ledger,
             temperature=None,
             timeout=240,
             allowed_tries=2,
-            extra_body={"plugins": [{"id": "web", "engine": "native"}]},
+            extra_body=search_request_options(cap),
         )
 
     def get_llm(self, purpose: str = "default", guarantee_type=None):  # type: ignore[override]
@@ -244,6 +298,7 @@ class EnsembleBot(FallTemplateBot2026):
             background=question.background_info,
             today=self._today(),
             resolution_date=self._resolution_date(question),
+            max_searches=self.profile.max_searches,
         )
 
     def _forecast_fields(self, question: MetaculusQuestion, research: str) -> dict:
@@ -331,6 +386,43 @@ class EnsembleBot(FallTemplateBot2026):
         return await super()._aggregate_predictions(predictions, question)
 
 
+def pick_spread(questions: list, limit: int) -> list:
+    """
+    The first `limit` questions, taking one of each question type before a
+    second of any type, so that a short test still covers different types.
+    """
+    by_type: dict[str, list] = {}
+    for question in questions:
+        by_type.setdefault(type(question).__name__, []).append(question)
+    picked: list = []
+    while len(picked) < limit and any(by_type.values()):
+        for group in by_type.values():
+            if group and len(picked) < limit:
+                picked.append(group.pop(0))
+    return picked
+
+
+def cost_report(
+    ledger: CostLedger,
+    question_count: int,
+    credits_before: float | None,
+    credits_after: float | None,
+) -> str:
+    lines = [ledger.format_table(question_count)]
+    if credits_before is not None and credits_after is not None:
+        spent = credits_before - credits_after
+        lines.append(
+            f"OpenRouter credit: ${credits_before:.2f} before, ${credits_after:.2f} after, "
+            f"${spent:.2f} spent. The balance can lag by a few minutes; when the two "
+            "differ, the balance is the final word."
+        )
+    lines.append(
+        "The 'Total cost estimated' line printed by the library above has been "
+        "about twice the real charge. Use the figures here."
+    )
+    return "\n".join(lines)
+
+
 RunMode = Literal["tournament", "test_questions"]
 
 TOURNAMENT_URLS = {
@@ -357,8 +449,16 @@ def main() -> None:
         action="store_true",
         help="Research and forecast but do not submit anything to Metaculus",
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Test mode only: forecast at most this many questions (a cheap trial run)",
+    )
     args = parser.parse_args()
     run_mode: RunMode = args.mode
+    if args.limit is not None and (run_mode != "test_questions" or args.limit < 1):
+        parser.error("--limit needs --mode test_questions and a number of 1 or more")
     publish = not args.dry_run
 
     check_environment(strict=True)
@@ -395,14 +495,27 @@ def main() -> None:
         # must not be reused across separate asyncio.run() calls.
         reports: list = []
         for tournament_id in tournament_ids:
-            reports += await bot.forecast_on_tournament(
-                tournament_id, return_exceptions=True
-            )
+            if args.limit is None:
+                reports += await bot.forecast_on_tournament(
+                    tournament_id, return_exceptions=True
+                )
+                continue
+            questions = client.get_all_open_questions_from_tournament(tournament_id)
+            chosen = pick_spread(questions, args.limit)
+            print(f"Limit {args.limit}: forecasting {len(chosen)} of {len(questions)} open questions\n")
+            reports += await bot.forecast_questions(chosen, return_exceptions=True)
         return reports
 
     forecast_reports = asyncio.run(forecast_all())
 
     bot.log_report_summary(forecast_reports)
+    print(
+        "\n"
+        + cost_report(
+            bot.ledger, len(forecast_reports), credits, openrouter_credits_remaining()
+        )
+        + "\n"
+    )
     print_run_summary_banner(
         forecast_reports,
         will_publish=publish,

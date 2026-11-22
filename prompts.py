@@ -109,6 +109,7 @@ def research_prompt(
     background: str | None,
     today: str,
     resolution_date: str | None,
+    max_searches: int | None = None,
 ) -> str:
     _, task = RESEARCH_PASSES[pass_key]
     return _join(
@@ -120,6 +121,18 @@ def research_prompt(
         f"Fine print:\n{fine_print}" if fine_print else None,
         f"Background given by the question writer:\n{background}" if background else None,
         task,
+        search_budget_note(max_searches) if max_searches else None,
+    )
+
+
+def search_budget_note(max_searches: int) -> str:
+    plural = "search" if max_searches == 1 else "searches"
+    return (
+        f"Search budget: at most {max_searches} web {plural} for this task. Plan them "
+        "before you start, spend them on the points that matter most for the "
+        "outcome, and prefer one precise query to several similar ones. When the "
+        "budget is used up, stop searching and write the report with what you "
+        "have, saying plainly what you could not check."
     )
 
 
