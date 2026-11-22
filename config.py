@@ -44,6 +44,10 @@ class Profile:
     search_model: str
     research_passes: tuple[str, ...]  # keys of prompts.RESEARCH_PASSES
     helper_model: str  # parses answers into numbers, writes the short summary
+    # Most web searches one research pass may run. Each search is billed on
+    # its own (about $0.01 with the provider's native search), and left alone
+    # a model ran 10 to 17 of them per question, which was 86% of the cost.
+    max_searches: int = 5
 
 
 PROFILES: dict[str, Profile] = {
@@ -59,6 +63,7 @@ PROFILES: dict[str, Profile] = {
         search_model=GPT,
         research_passes=("status", "base_rates"),
         helper_model=HAIKU,
+        max_searches=6,
     ),
     "standard": Profile(
         name="standard",
@@ -94,6 +99,7 @@ PROFILES: dict[str, Profile] = {
         search_model=GPT_SMALL,
         research_passes=("combined",),
         helper_model=HAIKU,
+        max_searches=4,
     ),
 }
 

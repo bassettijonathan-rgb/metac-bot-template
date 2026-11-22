@@ -45,6 +45,15 @@ class CallFromUsageTests(unittest.TestCase):
         call = call_from_usage(FORECAST, "m", usage)
         self.assertEqual((call.web_searches, call.cost_usd), (2, 0.5))
 
+    def test_reads_searches_from_the_details_block_openrouter_sends(self):
+        usage = {
+            "prompt_tokens": 127153,
+            "completion_tokens": 8847,
+            "cost": 0.187282375,
+            "server_tool_use_details": {"web_search_requests": 17},
+        }
+        self.assertEqual(call_from_usage(SEARCH, "m", usage).web_searches, 17)
+
     def test_falls_back_when_usage_has_no_cost(self):
         call = call_from_usage(HELPER, "m", {"prompt_tokens": 1}, fallback_cost=0.02)
         self.assertEqual(call.cost_usd, 0.02)

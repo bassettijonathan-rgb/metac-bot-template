@@ -62,13 +62,22 @@ def _as_float(value: Any) -> float:
         return 0.0
 
 
+def _web_searches(usage: Any) -> int:
+    for name in ("server_tool_use_details", "server_tool_use"):
+        count = _get(_get(usage, name), "web_search_requests")
+        if count is not None:
+            return _as_int(count)
+    return 0
+
+
 def call_from_usage(stage: str, model: str, usage: Any, fallback_cost: Any = None) -> Call:
     """
     Build a Call from the usage block of a model response.
 
     usage: the response's usage object or dict. OpenRouter puts the real charge
     in usage.cost and the number of web searches in
-    usage.server_tool_use.web_search_requests.
+    usage.server_tool_use_details.web_search_requests (server_tool_use on some
+    endpoints).
     fallback_cost: used only when usage carries no cost.
     """
     cost = _get(usage, "cost")
@@ -79,7 +88,7 @@ def call_from_usage(stage: str, model: str, usage: Any, fallback_cost: Any = Non
         model=model,
         prompt_tokens=_as_int(_get(usage, "prompt_tokens")),
         completion_tokens=_as_int(_get(usage, "completion_tokens")),
-        web_searches=_as_int(_get(_get(usage, "server_tool_use"), "web_search_requests")),
+        web_searches=_web_searches(usage),
         cost_usd=_as_float(cost),
     )
 

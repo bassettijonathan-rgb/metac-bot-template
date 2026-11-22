@@ -110,6 +110,18 @@ def _has_asknews_keys() -> bool:
     )
 
 
+def search_request_options(max_searches: int) -> dict:
+    return {
+        "tools": [
+            {
+                "type": "openrouter:web_search",
+                "parameters": {"engine": "native", "max_uses": max_searches},
+            }
+        ],
+        "max_tool_calls": max_searches,
+    }
+
+
 class TrackedLlm(GeneralLlm):
     """A GeneralLlm that writes what each call cost into the run's ledger."""
 
@@ -173,8 +185,12 @@ class EnsembleBot(FallTemplateBot2026):
         return self._member_llms[model]
 
     def _search_llm(self) -> GeneralLlm:
-        # OpenRouter web plugin with the provider's own search engine. The
-        # donated tournament credits do not cover the Exa engine.
+        # OpenRouter's web search tool with the provider's own search engine
+        # (the donated tournament credits do not cover the Exa engine). Every
+        # search is billed, so the number of searches is capped three ways:
+        # max_uses (honoured by Anthropic's search), max_tool_calls
+        # (OpenRouter's own limit) and a budget line in the research prompt.
+        cap = self.profile.max_searches
         return TrackedLlm(
             self.profile.search_model,
             stage=SEARCH,
@@ -182,7 +198,7 @@ class EnsembleBot(FallTemplateBot2026):
             temperature=None,
             timeout=240,
             allowed_tries=2,
-            extra_body={"plugins": [{"id": "web", "engine": "native"}]},
+            extra_body=search_request_options(cap),
         )
 
     def get_llm(self, purpose: str = "default", guarantee_type=None):  # type: ignore[override]
@@ -282,6 +298,7 @@ class EnsembleBot(FallTemplateBot2026):
             background=question.background_info,
             today=self._today(),
             resolution_date=self._resolution_date(question),
+            max_searches=self.profile.max_searches,
         )
 
     def _forecast_fields(self, question: MetaculusQuestion, research: str) -> dict:

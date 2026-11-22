@@ -180,7 +180,7 @@ class RealLibraryTests(unittest.TestCase):
             search = ensemble_bot.get_llm("researcher", "llm")
             self.assertEqual(
                 search.litellm_kwargs["extra_body"],
-                {"plugins": [{"id": "web", "engine": "native"}]},
+                bot.search_request_options(profile.max_searches),
             )
 
     def test_all_question_types_run_end_to_end(self):
@@ -429,7 +429,7 @@ class RealLibraryTests(unittest.TestCase):
                     "completion_tokens": 700,
                     "total_tokens": 9700,
                     "cost": 0.0421,
-                    "server_tool_use": {"web_search_requests": 3},
+                    "server_tool_use_details": {"web_search_requests": 3},
                 },
             )
 

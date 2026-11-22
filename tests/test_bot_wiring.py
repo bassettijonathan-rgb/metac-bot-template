@@ -191,7 +191,16 @@ class WiringTests(unittest.TestCase):
         )
         search = kwargs["llms"]["researcher"]
         self.assertEqual(
-            search.kwargs["extra_body"], {"plugins": [{"id": "web", "engine": "native"}]}
+            search.kwargs["extra_body"],
+            {
+                "tools": [
+                    {
+                        "type": "openrouter:web_search",
+                        "parameters": {"engine": "native", "max_uses": 5},
+                    }
+                ],
+                "max_tool_calls": 5,
+            },
         )
         self.assertEqual(len(make_bot("lean").profile.ensemble), 3)
 
@@ -333,6 +342,20 @@ class WiringTests(unittest.TestCase):
             # stage and ledger are ours: they must not reach the model request
             self.assertNotIn("stage", llm.kwargs)
             self.assertNotIn("ledger", llm.kwargs)
+
+    def test_search_cap_follows_the_profile_in_request_and_prompt(self):
+        for name, profile in config.PROFILES.items():
+            b = make_bot(name)
+            body = b.init_kwargs["llms"]["researcher"].kwargs["extra_body"]
+            self.assertEqual(body["max_tool_calls"], profile.max_searches, name)
+            self.assertEqual(
+                body["tools"][0]["parameters"]["max_uses"], profile.max_searches, name
+            )
+            CALLS.clear()
+            asyncio.run(b.run_research(FakeBinary(qid=1)))
+            self.assertTrue(CALLS)
+            for _, prompt in CALLS:
+                self.assertIn(f"at most {profile.max_searches} web searches", prompt)
 
     def test_pick_spread_takes_one_of_each_type_first(self):
         questions = [FakeBinary(1), FakeBinary(2), FakeNumeric(3), FakeDate(4)]
