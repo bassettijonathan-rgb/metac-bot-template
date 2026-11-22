@@ -319,6 +319,38 @@ class WiringTests(unittest.TestCase):
             result = asyncio.run(b._aggregate_predictions(predictions, question))
             self.assertEqual(result, "template-aggregate")
 
+    def test_every_model_is_tracked_under_its_stage(self):
+        b = make_bot("minimal")
+        llms = b.init_kwargs["llms"]
+        self.assertEqual(llms["researcher"].stage, bot.SEARCH)
+        self.assertEqual(llms["parser"].stage, bot.HELPER)
+        self.assertEqual(llms["summarizer"].stage, bot.HELPER)
+        self.assertEqual(llms["default"].stage, bot.FORECAST)
+        for member in b.profile.ensemble:
+            self.assertEqual(b._llm_for(member.model).stage, bot.FORECAST)
+        for llm in (*llms.values(), *b._member_llms.values()):
+            self.assertIs(llm.ledger, b.ledger)
+            # stage and ledger are ours: they must not reach the model request
+            self.assertNotIn("stage", llm.kwargs)
+            self.assertNotIn("ledger", llm.kwargs)
+
+    def test_pick_spread_takes_one_of_each_type_first(self):
+        questions = [FakeBinary(1), FakeBinary(2), FakeNumeric(3), FakeDate(4)]
+        self.assertEqual(
+            [q.id_of_question for q in bot.pick_spread(questions, 2)], [1, 3]
+        )
+        self.assertEqual(
+            [q.id_of_question for q in bot.pick_spread(questions, 4)], [1, 3, 4, 2]
+        )
+        self.assertEqual(len(bot.pick_spread(questions, 99)), 4)
+        self.assertEqual(bot.pick_spread([], 3), [])
+
+    def test_cost_report_shows_the_credit_difference_when_known(self):
+        ledger = bot.CostLedger()
+        report = bot.cost_report(ledger, 2, 5.0, 4.6)
+        self.assertIn("$0.40 spent", report)
+        self.assertNotIn("spent", bot.cost_report(ledger, 2, None, 4.6))
+
     def test_balance_check_never_raises(self):
         os.environ.pop("OPENROUTER_API_KEY", None)
         self.assertIsNone(bot.openrouter_credits_remaining())
