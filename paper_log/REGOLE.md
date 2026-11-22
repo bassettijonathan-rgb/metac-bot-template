@@ -113,3 +113,12 @@ probabilità, quindi il termine di confronto è la moneta: 50%.
   trimestrali. I mercati liquidi con scadenza vicina sono pochi (inflazione, Fed,
   forse occupazione): la pista A potrebbe non arrivare a 50 casi entro il
   15 febbraio 2027, e in quel caso il giudizio sarà "troppo presto".
+- 22 novembre 2026: prime sei chiusure della pista B, direzione indovinata 2 volte
+  su 6 (Brier 0,272 contro 0,250 della moneta), nessuna scommessa perché nessuna
+  previsione superava il 60/40. Mercato in forte calo (S&P -8,5% in sei sedute):
+  i casi della stessa settimana non sono indipendenti.
+- Idea da proporre al titolare nel primo riepilogo, non adottata: aggiungere alla
+  pista A i mercati Kalshi sui livelli settimanali di S&P 500 e Nasdaq, che sono
+  liquidi e riguardano proprio i sottostanti di CFD e knock-out. Sarebbe un
+  allargamento delle regole, quindi serve il suo consenso.
+- Twelve Data accetta al massimo 8 richieste al minuto: chiedere i prezzi a gruppi.
