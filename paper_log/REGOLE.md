@@ -122,3 +122,9 @@ probabilità, quindi il termine di confronto è la moneta: 50%.
   liquidi e riguardano proprio i sottostanti di CFD e knock-out. Sarebbe un
   allargamento delle regole, quindi serve il suo consenso.
 - Twelve Data accetta al massimo 8 richieste al minuto: chiedere i prezzi a gruppi.
+- 25 novembre 2026: Dell e Deere (data evento 25 novembre) restano aperte perché
+  la tornata parte alle 14:43 di New York, prima della chiusura: si chiudono domenica.
+  Nessuna previsione nuova: settimana del Ringraziamento con pochi eventi; il
+  mercato Kalshi sull'occupazione di novembre non passa la soglia di liquidità
+  (meno di 2.000 dollari per contratto). Analog Devices -17,4% in una seduta:
+  da sola pesa molto sul Brier, un motivo in più per non giudicare prima di 50 casi.
